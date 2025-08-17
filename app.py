@@ -383,11 +383,11 @@ def generate_qrs():
         # Just use the token directly - the frontend will handle the URL construction
         token = team['token']
         
-        # Generate QR code with just the token
-        qr = segno.make(token)
+        # Generate QR code with moderate error correction and smaller size
+        qr = segno.make(token, error='M', version=4)  # M = Medium error correction (15%)
         from io import BytesIO
         svg_io = BytesIO()
-        qr.save(svg_io, kind='svg', scale=8)
+        qr.save(svg_io, kind='svg', scale=4, border=2, dark="black", light="white")
         svg_content = svg_io.getvalue().decode('utf-8')  # Convert bytes to string
         
         qr_codes.append({

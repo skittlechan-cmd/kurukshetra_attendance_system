@@ -77,10 +77,10 @@ def import_teams():
     """Import teams from kurukshetra.csv"""
     conn = get_db()
     with open('kurukshetra.csv', 'r', encoding='utf-8') as file:
-        # Clean up column names by removing extra whitespace
-        headers = next(file).strip().split(',')
-        headers = [h.strip() for h in headers]
-        csv_reader = csv.DictReader(file, fieldnames=headers)
+        # Read using CSV DictReader with the file's own headers
+        csv_reader = csv.DictReader(file)
+        # Print the headers to debug
+        print("CSV Headers:", csv_reader.fieldnames)
         teams_imported = 0
         members_imported = 0
         
@@ -94,6 +94,7 @@ def import_teams():
                 
             # If row has an ID, it's a new team
             if row['ID']:
+                print(f"Processing team with ID: {row['ID']}")
                 team_id = f"T{row['ID'].zfill(3)}"  # Convert 1 to T001, etc
                 current_team_id = team_id
                 current_team_name = row['Team Name']
@@ -105,8 +106,9 @@ def import_teams():
                 
                 if not existing_team:
                     try:
-                        # Generate unique token for team
-                        token = secrets.token_urlsafe(16)
+                        # Generate sequential token based on numeric part of team_id
+                        numeric_id = row['ID'].zfill(3)  # Get the numeric part and pad with zeros
+                        token = f"team_{numeric_id}"  # This will create tokens like team_001, team_002, etc
                         
                         # Insert team
                         conn.execute('''
@@ -116,40 +118,49 @@ def import_teams():
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
                             team_id, 
-                            row['Team Name'].strip(),
+                            row['Team Name'].strip() if row['Team Name'] else '',
                             row['College names'].strip() if row['College names'] else '',
-                            2,  # Default to 2 since that seems to be the common team size
-                            row['Team Members'].strip() if row['Team Members'] else '',
-                            row['Email Address'].strip() if row['Email Address'] else row['Team Leader Email'].strip(),
-                            row['Phone no.'].strip() if row['Phone no.'] else '',
+                            int(row['Team Size']) if row['Team Size'] and row['Team Size'].strip() else 2,
+                            row['            Team Members'].strip() if row['            Team Members'] else '',
+                            row['Team Leader Email'].strip() if row['Team Leader Email'] else row['Email Address'].strip(),
+                            row['      Phone no.'].strip() if row['      Phone no.'] else '',
                             token
                         ))
                         teams_imported += 1
                         conn.commit()
+                        print(f"Successfully imported team {team_id}: {row['Team Name'].strip()}")
                     except Exception as e:
                         print(f"Error importing team {team_id}: {str(e)}")
             
             # If we have a current team and the row has team member info
-            if current_team_id and row['Team Members']:
+            # Handle team members
+            if current_team_id:
+                print(f"Checking member data for team {current_team_id}: {row['            Team Members'] if '            Team Members' in row else 'No member data'}")
+            if current_team_id and row.get('            Team Members'):
                 # Check if member already exists
                 existing_member = conn.execute('''
                     SELECT id FROM members 
                     WHERE team_id = ? AND name = ?
-                ''', (current_team_id, row['Team Members'].strip())).fetchone()
+                ''', (current_team_id, row['            Team Members'].strip())).fetchone()
                 
                 if not existing_member:
                     # Insert member
-                    conn.execute('''
-                        INSERT INTO members (
-                            team_id, name, phone, gender
-                        ) VALUES (?, ?, ?, ?)
-                    ''', (
-                        current_team_id,
-                        row['Team Members'].strip(),
-                        row['Phone no.'].strip() if row['Phone no.'] else None,
-                        row['Gender'].strip() if row['Gender'] else None
-                    ))
-                    members_imported += 1
+                    try:
+                        conn.execute('''
+                            INSERT INTO members (
+                                team_id, name, phone, gender
+                            ) VALUES (?, ?, ?, ?)
+                        ''', (
+                            current_team_id,
+                            row['            Team Members'].strip(),
+                            row['      Phone no.'].strip() if row['      Phone no.'] else None,
+                            row['        Gender'].strip() if row['        Gender'] else None
+                        ))
+                        conn.commit()
+                        members_imported += 1
+                        print(f"Successfully added member {row['            Team Members'].strip()} to team {current_team_id}")
+                    except Exception as e:
+                        print(f"Error adding member to team {current_team_id}: {str(e)}")
         
         conn.commit()
         print(f"Imported {teams_imported} teams and {members_imported} members")

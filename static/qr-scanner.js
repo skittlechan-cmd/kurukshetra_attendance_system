@@ -39,7 +39,19 @@ class QRScanner {
                 },
                 (decodedText) => {
                     this.stop();
-                    window.location.href = `/scan?t=${encodeURIComponent(decodedText)}`;
+                    // Handle both full URLs and plain tokens
+                    try {
+                        const url = new URL(decodedText);
+                        const token = url.searchParams.get('t');
+                        if (token) {
+                            window.location.href = `/scan?t=${encodeURIComponent(token)}`;
+                        } else {
+                            window.location.href = `/scan?t=${encodeURIComponent(decodedText)}`;
+                        }
+                    } catch {
+                        // If not a valid URL, treat as a raw token
+                        window.location.href = `/scan?t=${encodeURIComponent(decodedText)}`;
+                    }
                 },
                 () => {} // Ignore errors during scanning
             );

@@ -1,1 +1,0 @@
-# kurukshetra_attendance_system

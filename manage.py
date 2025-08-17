@@ -104,8 +104,8 @@ def import_csv(csv_file):
                 ).fetchone()
                 
                 if not existing_team:
-                    # Generate unique token for team
-                    token = secrets.token_urlsafe(16)
+                    # Generate sequential token based on team_id
+                    token = f"team_{team_id:04d}"  # This will create tokens like team_0001, team_0002, etc
                     
                     # Insert team
                     conn.execute('''
@@ -161,13 +161,13 @@ def generate_qrs():
         os.makedirs('qr_codes')
     
     for team in teams:
-        # Generate QR code URL
-        url = f"{BASE_URL}/scan?t={team['token']}"
+        # Generate QR code with just the token
+        token = team['token']
         
-        # Generate QR code and save as SVG
-        qr = segno.make(url)
+        # Generate QR code with moderate error correction and smaller size
+        qr = segno.make(token, error='M', version=4)  # M = Medium error correction (15%)
         filename = f"qr_codes/{team['team_id']}.svg"
-        qr.save(filename, scale=8)
+        qr.save(filename, scale=4, border=2, dark="black", light="white")
         
         print(f"Generated QR for {team['team_id']} - {team['name']}")
     
