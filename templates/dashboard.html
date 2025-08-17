@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Hackathon Attendance{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="dashboard-header">
+        <h1>Attendance Dashboard</h1>
+        <button onclick="fetchStats()" class="btn btn-primary">🔄 Fetch Latest</button>
+    </div>
+    
+    <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+            <h3>Teams</h3>
+            <div class="stat-number" id="team-present">-</div>
+            <div class="stat-label">Present / <span id="team-total">-</span> Total</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Members</h3>
+            <div class="stat-number" id="member-present">-</div>
+            <div class="stat-label">Present / <span id="member-total">-</span> Total</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Team Attendance Rate</h3>
+            <div class="stat-number" id="team-rate">-</div>
+            <div class="stat-label">Percentage</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Member Attendance Rate</h3>
+            <div class="stat-number" id="member-rate">-</div>
+            <div class="stat-label">Percentage</div>
+        </div>
+    </div>
+    
+    <div class="teams-section">
+        <h2>Team Status</h2>
+        <div class="filter-controls">
+            <button onclick="filterTeams('all')" class="btn btn-sm active" id="filter-all">All Teams</button>
+            <button onclick="filterTeams('present')" class="btn btn-sm" id="filter-present">Present Only</button>
+            <button onclick="filterTeams('absent')" class="btn btn-sm" id="filter-absent">Absent Only</button>
+        </div>
+        
+        <div class="teams-list" id="teams-list">
+            <div class="loading">Loading teams...</div>
+        </div>
+    </div>
+
+    <!-- Team Details Modal -->
+    <div id="team-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-team-name">Team Name</h2>
+                <span class="close" onclick="closeTeamModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="team-info">
+                    <div class="info-row"><strong>Team ID:</strong> <span id="modal-team-id"></span></div>
+                    <div class="info-row"><strong>College:</strong> <span id="modal-team-college"></span></div>
+                    <div class="info-row"><strong>Leader:</strong> <span id="modal-team-leader"></span></div>
+                    <div class="info-row"><strong>Email:</strong> <span id="modal-team-email"></span></div>
+                    <div class="info-row"><strong>Phone:</strong> <span id="modal-team-phone"></span></div>
+                    <div class="info-row">
+                        <strong>Status:</strong> 
+                        <span id="modal-team-status" class="status-badge"></span>
+                    </div>
+                </div>
+                
+                <div class="team-actions">
+                    <button id="btn-mark-in" onclick="updateTeamStatus('in')" class="btn btn-success">Mark Team In</button>
+                    <button id="btn-mark-out" onclick="updateTeamStatus('out')" class="btn btn-danger">Mark Team Out</button>
+                </div>
+
+                <div class="members-section">
+                    <h3>Team Members</h3>
+                    <div id="modal-members-list" class="members-list">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let allTeams = [];
+let currentFilter = 'all';
+
+// Variable to store the auto-refresh interval
+let autoRefreshInterval;
+
+function fetchStats(autoRefresh = false) {
+    // Clear any existing interval if this is a manual refresh
+    if (!autoRefresh && autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            // Update stats
+            document.getElementById('team-present').textContent = data.teams.present;
+            document.getElementById('team-total').textContent = data.teams.total;
+            document.getElementById('member-present').textContent = data.members.present;
+            document.getElementById('member-total').textContent = data.members.total;
+            
+            // Calculate rates
+            const teamRate = data.teams.total > 0 ? Math.round((data.teams.present / data.teams.total) * 100) : 0;
+            const memberRate = data.members.total > 0 ? Math.round((data.members.present / data.members.total) * 100) : 0;
+            
+            document.getElementById('team-rate').textContent = teamRate + '%';
+            document.getElementById('member-rate').textContent = memberRate + '%';
+            
+            // Store and display teams
+            allTeams = data.team_list;
+            displayTeams(allTeams);
+
+            // Start auto-refresh if this was a manual refresh
+            if (!autoRefresh) {
+                // Set up auto-refresh every 30 seconds
+                autoRefreshInterval = setInterval(() => {
+                    fetchStats(true);
+                }, 30000); // 30 seconds
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('teams-list').innerHTML = '<div class="error">Failed to load data</div>';
+        });
+}
+
+function displayTeams(teams) {
+    // Apply current filter first
+    let teamsToDisplay = teams;
+    if (currentFilter === 'present') {
+        teamsToDisplay = teams.filter(team => team.is_present === 1);
+    } else if (currentFilter === 'absent') {
+        teamsToDisplay = teams.filter(team => team.is_present === 0);
+    }
+
+    const container = document.getElementById('teams-list');
+    
+    if (teamsToDisplay.length === 0) {
+        container.innerHTML = '<div class="no-teams">No teams found</div>';
+        return;
+    }
+    
+    const html = teamsToDisplay.map(team => `
+        <div class="team-row ${team.is_present === 1 ? 'team-present' : 'team-absent'}" onclick="showTeamDetails('${team.team_id}')">
+            <div class="team-main-info">
+                <h3>${team.name}</h3>
+                <p class="team-id">ID: ${team.team_id}</p>
+                <p class="team-college">${team.college}</p>
+            </div>
+            <div class="team-stats">
+                <div class="member-count">
+                    <span class="present">${team.members_present || 0}</span> / 
+                    <span class="total">${team.member_count}</span> members present
+                </div>
+                <span class="team-status ${team.is_present === 1 ? 'status-present' : 'status-absent'}">
+                    ${team.is_present === 1 ? '✅ Team Present' : '❌ Team Absent'}
+                </span>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+// Initial fetch when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    fetchStats();
+});
+
+// Modal Functions
+let currentTeam = null;
+
+function showTeamDetails(teamId) {
+    currentTeam = allTeams.find(t => t.team_id === teamId);
+    if (!currentTeam) return;
+
+    // Update modal content
+    document.getElementById('modal-team-name').textContent = currentTeam.name;
+    document.getElementById('modal-team-id').textContent = currentTeam.team_id;
+    document.getElementById('modal-team-college').textContent = currentTeam.college;
+    document.getElementById('modal-team-leader').textContent = currentTeam.leader_name;
+    document.getElementById('modal-team-email').textContent = currentTeam.leader_email;
+    document.getElementById('modal-team-phone').textContent = currentTeam.leader_phone;
+    
+    const statusBadge = document.getElementById('modal-team-status');
+    statusBadge.textContent = currentTeam.is_present ? '✅ Present' : '❌ Absent';
+    statusBadge.className = `status-badge ${currentTeam.is_present ? 'status-present' : 'status-absent'}`;
+
+    // Update members list
+    const membersList = document.getElementById('modal-members-list');
+    membersList.innerHTML = '';
+
+    if (currentTeam.members && currentTeam.members.length > 0) {
+        const membersHtml = currentTeam.members.map(member => `
+            <div class="member-item" data-member-id="${member.id}">
+                <div class="member-info">
+                    <strong>${member.name}</strong>
+                    <span class="member-phone">${member.phone}</span>
+                    <span class="status-badge ${member.is_present == 1 ? 'status-present' : 'status-absent'}">
+                        ${member.is_present == 1 ? '✅ Present' : '❌ Absent'}
+                    </span>
+                </div>
+                <div class="member-actions">
+                    <button onclick="updateMemberStatus(${member.id}, 'in')" class="btn btn-sm btn-success">In</button>
+                    <button onclick="updateMemberStatus(${member.id}, 'out')" class="btn btn-sm btn-danger">Out</button>
+                </div>
+            </div>
+        `).join('');
+        membersList.innerHTML = membersHtml;
+    } else {
+        membersList.innerHTML = '<p>No team members found.</p>';
+    }
+
+    // Show modal
+    document.getElementById('team-modal').style.display = 'block';
+}
+
+function closeTeamModal() {
+    document.getElementById('team-modal').style.display = 'none';
+    currentTeam = null;
+}
+
+function updateTeamStatus(action) {
+    if (!currentTeam) return;
+    
+    // Update UI optimistically
+    const statusBadge = document.getElementById('modal-team-status');
+    const newStatus = action === 'in';
+    statusBadge.textContent = newStatus ? '✅ Present' : '❌ Absent';
+    statusBadge.className = `status-badge ${newStatus ? 'status-present' : 'status-absent'}`;
+    
+    fetch('/api/team/action', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            token: currentTeam.token,
+            action: action,
+            by_who: 'system'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the current team's status in allTeams array
+            const teamIndex = allTeams.findIndex(t => t.team_id === currentTeam.team_id);
+            if (teamIndex !== -1) {
+                allTeams[teamIndex].is_present = newStatus ? 1 : 0;
+            }
+            
+            // Refresh dashboard without closing modal
+            displayTeams(allTeams);
+        } else {
+            showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+            // Revert UI on error
+            statusBadge.textContent = currentTeam.is_present ? '✅ Present' : '❌ Absent';
+            statusBadge.className = `status-badge ${currentTeam.is_present ? 'status-present' : 'status-absent'}`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Failed to update team status', 'error');
+    });
+}
+
+function updateMemberStatus(memberId, action) {
+    // Find the member in current team
+    const member = currentTeam.members.find(m => m.id === memberId);
+    if (!member) return;
+    
+    // Update UI optimistically
+    const memberElement = document.querySelector(`[data-member-id="${memberId}"]`);
+    if (memberElement) {
+        const statusBadge = memberElement.querySelector('.status-badge');
+        const newStatus = action === 'in';
+        statusBadge.textContent = newStatus ? '✅ Present' : '❌ Absent';
+        statusBadge.className = `status-badge ${newStatus ? 'status-present' : 'status-absent'}`;
+    }
+    
+    fetch('/api/member/action', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            member_id: memberId,
+            action: action,
+            by_who: 'system'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the member's status in currentTeam
+            member.is_present = action === 'in' ? 1 : 0;
+            
+            // Update the member count in allTeams
+            const teamIndex = allTeams.findIndex(t => t.team_id === currentTeam.team_id);
+            if (teamIndex !== -1) {
+                const presentCount = currentTeam.members.filter(m => m.is_present === 1).length;
+                allTeams[teamIndex].members_present = presentCount;
+            }
+            
+            // Refresh dashboard without closing modal
+            displayTeams(allTeams);
+        } else {
+            showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+            // Revert UI changes on error
+            if (memberElement) {
+                const statusBadge = memberElement.querySelector('.status-badge');
+                statusBadge.textContent = member.is_present ? '✅ Present' : '❌ Absent';
+                statusBadge.className = `status-badge ${member.is_present ? 'status-present' : 'status-absent'}`;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Failed to update member status', 'error');
+    });
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('team-modal');
+    if (event.target === modal) {
+        closeTeamModal();
+    }
+}
+
+function filterTeams(filter) {
+    // Update button states
+    document.querySelectorAll('.filter-controls .btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`filter-${filter}`).classList.add('active');
+    
+    // Update current filter
+    currentFilter = filter;
+    
+    // Filter teams
+    let filteredTeams = allTeams;
+    if (filter === 'present') {
+        filteredTeams = allTeams.filter(team => team.is_present === 1);
+    } else if (filter === 'absent') {
+        filteredTeams = allTeams.filter(team => team.is_present === 0);
+    }
+    
+    displayTeams(filteredTeams);
+}
+</script>
+{% endblock %}

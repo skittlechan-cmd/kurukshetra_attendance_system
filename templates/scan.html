@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Team Scan - Hackathon Attendance{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- QR Scanner -->
+    <div id="qr-reader"></div>
+    <div id="qr-reader-results"></div>
+    {% if error %}
+        <div class="error-card">
+            <h2>❌ Error</h2>
+            <p>{{ error }}</p>
+            <button onclick="openManualScan()" class="btn btn-primary">Try Manual Entry</button>
+        </div>
+    {% else %}
+        <div class="team-card">
+            <div class="team-header" onclick="toggleTeamInfo('{{ team.team_id }}')">
+                <div class="team-title">
+                    <h1>{{ team.name }}</h1>
+                    <div class="team-brief">
+                        <span class="team-id">ID: {{ team.team_id }}</span>
+                        <span class="status-badge {% if team.is_present %}status-in{% else %}status-out{% endif %}">
+                            {% if team.is_present %}✅ Present{% else %}❌ Absent{% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="expand-icon">▼</div>
+            </div>
+            
+            <div class="team-details" id="team-details-{{ team.team_id }}">
+                <div class="team-info">
+                    <div class="info-row"><strong>College:</strong> {{ team.college }}</div>
+                    <div class="info-row"><strong>Leader:</strong> {{ team.leader_name }}</div>
+                    <div class="info-row"><strong>Email:</strong> {{ team.leader_email }}</div>
+                    <div class="info-row"><strong>Phone:</strong> {{ team.leader_phone }}</div>
+                </div>
+                
+                <div class="team-actions">
+                    <button onclick="teamAction('{{ team.token }}', 'in')" class="btn btn-success">Mark Team In</button>
+                    <button onclick="teamAction('{{ team.token }}', 'out')" class="btn btn-danger">Mark Team Out</button>
+                </div>
+            </div>
+        </div>
+        
+        {% if members %}
+        <div class="members-section">
+            <h2>Team Members</h2>
+            <div class="members-list">
+                {% for member in members %}
+                <div class="member-card">
+                    <div class="member-info">
+                        <div class="member-name-status">
+                            <h3>{{ member.name }}</h3>
+                            <span class="status-badge {% if member.is_present %}status-in{% else %}status-out{% endif %}">
+                                {% if member.is_present %}✅{% else %}❌{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="member-actions">
+                        <button onclick="memberAction({{ member.id }}, 'in')" class="btn btn-sm btn-success">In</button>
+                        <button onclick="memberAction({{ member.id }}, 'out')" class="btn btn-sm btn-danger">Out</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    {% endif %}
+</div>
+
+<script>
+// Store token for API calls
+const teamToken = {% if team %}'{{ team.token }}'{% else %}null{% endif %};
+
+function toggleTeamInfo(teamId) {
+    const header = document.querySelector(`.team-header`);
+    const details = document.getElementById(`team-details-${teamId}`);
+    
+    header.classList.toggle('active');
+    details.classList.toggle('active');
+}
+
+function teamAction(token, action) {
+    fetch('/api/team/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token, action: action, by_who: "System" })
+    })
+    .then(response => response.json())
+    .then(data => {
+        location.reload();
+    })
+    .catch(error => console.error("Error:", error));
+}
+
+function memberAction(memberId, action) {
+    fetch('/api/member/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: memberId, action: action, by_who: "System" })
+    })
+    .then(response => response.json())
+    .then(data => {
+        location.reload();
+    })
+    .catch(error => console.error("Error:", error));
+}
+</script>
+{% endblock %}

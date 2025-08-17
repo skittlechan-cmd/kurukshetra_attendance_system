@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Home - Hackathon Attendance{% endblock %}
+{% block content %}
+<div class="container">
+<div class="hero">
+<h1>Welcome to Hackathon Attendance</h1>
+<p>Scan QR codes to track team and member attendance</p>
+<div class="feature-grid">
+<div class="feature-card">
+<h3>📱 QR Code Scanning</h3>
+<p>Each team has a unique QR code for easy attendance tracking</p>
+</div>
+<div class="feature-card">
+<h3>👥 Team Management</h3>
+<p>Track both team and individual member attendance</p>
+</div>
+<div class="feature-card">
+<h3>📊 Real-time Dashboard</h3>
+<p>Monitor attendance statistics and team status</p>
+</div>
+<div class="feature-card">
+<h3>📝 Attendance Logs</h3>
+<p>Complete audit trail of all attendance actions</p>
+</div>
+</div>
+<div class="action-buttons">
+<a href="{{ url_for('dashboard') }}" class="btn btn-primary">View Dashboard</a>
+<button onclick="openManualScan()" class="btn btn-secondary">Manual Scan</button>
+</div>
+</div>
+</div>
+{% endblock %}
