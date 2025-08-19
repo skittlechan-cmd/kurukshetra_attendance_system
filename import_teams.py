@@ -2,6 +2,30 @@ import sqlite3
 import csv
 import secrets
 import os
+import re
+
+def extract_team_size(size_str):
+    """
+    Extract team size from string, handling cases like:
+    - Plain numbers ("2", "3")
+    - Ranges ("3-5", "Team(3-5)")
+    Returns the maximum possible team size or 2 as default
+    """
+    if not size_str or not str(size_str).strip():
+        return 2
+        
+    # Clean the string
+    size_str = str(size_str).strip()
+    
+    # Try to find any numbers in the string
+    numbers = re.findall(r'\d+', size_str)
+    
+    if not numbers:
+        return 2
+    
+    # Convert all found numbers to integers and take the maximum
+    # This handles both single numbers and ranges
+    return max(int(num) for num in numbers)
 
 # Configuration
 DATABASE = 'hackathon.db'
@@ -120,7 +144,7 @@ def import_teams():
                             team_id, 
                             row['Team Name'].strip() if row['Team Name'] else '',
                             row['College names'].strip() if row['College names'] else '',
-                            int(row['Team Size']) if row['Team Size'] and row['Team Size'].strip() else 2,
+                            extract_team_size(row['Team Size']) if row['Team Size'] and row['Team Size'].strip() else 2,
                             row['            Team Members'].strip() if row['            Team Members'] else '',
                             row['Team Leader Email'].strip() if row['Team Leader Email'] else row['Email Address'].strip(),
                             row['      Phone no.'].strip() if row['      Phone no.'] else '',
